@@ -1,0 +1,56 @@
+!pip install pyTelegramBotAPI
+
+import telebot
+import sqlite3
+from datetime import date
+from telebot import types
+
+#Создание базы данных
+db = sqlite3.connect('meters_data.db')
+cur = db.cursor()
+
+#Создание новой таблицы в БД
+cur.execute('CREATE TABLE IF NOT EXISTS meters_data (id INTEGER NOT NULL PRIMARY KEY, n_shop INTEGER NOT NULL, the_date TEXT NOT NULL, cold_water_meter REAL NOT NULL, hot_water_meter REAL NOT NULL, electricity_meter REAL NOT NULL)')
+db.commit()
+db.close()
+
+#Функция для заполнения БД
+def add(n_shop, cwm, hwm, em):
+  db = sqlite3.connect('meters_data.db')
+  cur = db.cursor()
+  last_id = cur.execute('SELECT MAX (id) FROM meters_data').fetchone()
+  if last_id[0] == None:
+    unique_id = 1
+  else:
+    unique_id = last_id[0] + 1
+  current_date = date.today()
+  cur.execute('INSERT INTO meters_data VALUES ({}, {}, "{}", {}, {}, {})'.format(unique_id, n_shop, current_date, cwm, hwm, em))
+  db.commit()
+  db.close()
+  
+#Присвоение токена
+bot = telebot.TeleBot('5616771056:AAFQqyjIq31hDKvXljsa7Jky0SyZ2CXdFvo') #тестовый токен
+
+#Собственно, сам бот
+@bot.message_handler(commands=['start'])
+def start(message):
+  markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+  btn1 = types.KeyboardButton("Ввести данные")
+  btn2 = types.KeyboardButton("Инфо")
+  markup.add(btn1, btn2)
+  bot.send_message(message.chat.id, text="Привет, {0.first_name}! Я бот для ввода показаний счетчиков потребления энергоресурсов".format(message.from_user), reply_markup=markup)
+
+@bot.message_handler(content_types=['text'])
+def get_user_text(message):
+  if message.text == "Ввести данные":
+    bot.send_message(message.from_user.id, 'Через запятую введите:\n Номер цеха\n Показания счетчика ХВ\n Показания счетчика ГВ\n Показания счетчика ЭЭ')
+  elif message.text == "Инфо":
+    bot.send_message(message.from_user.id, '''Бот принимает данные от ответственных за передачу показаний счетчиков и записывает их в базу данных для последующего хранения и обработки.\nСложности в использовании не представляет - главное следовать инструкциям появляющимся в чате бота''')
+  else:
+    string = message.text
+    n_shop, cwm, hwm, em = string.split(',')
+    print(n_shop, cwm, hwm, em) 
+    add(n_shop, cwm, hwm, em)
+    bot.send_message(message.from_user.id, 'Вы ввели данные на {} число:\n№Цеха - {}\nПоказания ХВ - {} м^3\nПоказания ГВ - {} м^3\nПоказания ЭЭ - {} кВт*ч'.format(date.today().strftime("%d.%m.%Y"), n_shop, cwm, hwm, em))
+    bot.send_message(message.from_user.id, 'Данные внесены в базу. Спасибо!')
+bot.infinity_polling()  
